@@ -55,7 +55,7 @@ Eleven of them, switchable from the menu bar or with a two-finger tap on the str
 **VU Outward**
 ![VU Outward](docs/images/vuOutward-Cyberpunk.png)
 
-Seven colour ramps are built in — Rainbow (the default), Green, Spectrum, Ice, Ember, Meter, Mono — and SoundBar also imports AVTouchBar-format colour sets automatically: drop them into `~/Downloads/AVTouchBar Custom Colors` and they appear in the Colour menu. (Some screenshots above use imported palettes.)
+Nine colour ramps are built in — Rainbow (the default), Green, Spectrum, Ice, Ember, Meter, Mono, Sakura, Fable Computer — and SoundBar also imports AVTouchBar-format colour sets automatically: drop them into `~/Downloads/AVTouchBar Custom Colors` and they appear in the Colour menu.
 
 ## Requirements
 

@@ -191,8 +191,11 @@ were checked (`--zoom 5` for a close look, `--ramp` for a clean left-to-right te
 
 ### Colours
 
-Seven ramps are built in: Rainbow (the default), Green, Spectrum, Ice, Ember, Meter, Mono — *Meter* is the classic
-green/amber/red ladder, which suits the VU. Beyond those, any AVTouchBar colour sets found in
+Nine ramps are built in: Rainbow (the default), Green, Spectrum, Ice, Ember, Meter, Mono, Sakura, Fable
+Computer — *Meter* is the classic green/amber/red ladder, which suits the VU; *Sakura* and *Fable
+Computer* were originally AVTouchBar colour sets, hand-transcribed into `PaletteLibrary.builtIns` from
+their decoded stops so they ship with the app rather than depending on an import. Beyond those, any
+other AVTouchBar colour sets found in
 `~/Downloads/AVTouchBar Custom Colors` are imported automatically and copied to
 `~/Library/Application Support/SoundBar/Colors` so they survive Downloads being cleared.
 

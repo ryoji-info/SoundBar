@@ -1,4 +1,4 @@
-SoundBar 1.0
+SoundBar 1.1
 ============
 
 An audio visualiser for the MacBook Pro Touch Bar. It wakes up on its own when sound
@@ -94,8 +94,8 @@ Menu bar:
 
   Pattern      11 of them — spectrum bars, fine bars, mirrored, mirrored fine, blocks,
                peaks, dot-matrix, waveform, and three VU meters (centred, inward, outward).
-  Colour       7 built-in ramps: Rainbow (the default), Green, Spectrum, Ice, Ember,
-               Meter, Mono.
+  Colour       9 built-in ramps: Rainbow (the default), Green, Spectrum, Ice, Ember,
+               Meter, Mono, Sakura, Fable Computer.
   Behaviour    Fullscreen, what counts as a trigger, and Input Meter:
                  Off         output only
                  Auto        input only when nothing is playing
@@ -105,7 +105,7 @@ Menu bar:
 
 More colours: SoundBar imports AVTouchBar-format colour sets. Drop them into
 "~/Downloads/AVTouchBar Custom Colors" and they are picked up and cached automatically.
-They are not bundled here — only the seven built-in ramps ship with the app.
+They are not bundled here — only the nine built-in ramps ship with the app.
 
 
 WHERE THINGS LIVE

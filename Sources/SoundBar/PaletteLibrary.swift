@@ -248,5 +248,20 @@ enum PaletteLibrary {
             (0.87, NSColor(srgbRed: 0.990, green: 0.453, blue: 0.032, alpha: 1)),
             (1.00, NSColor(srgbRed: 0.986, green: 0.000, blue: 0.027, alpha: 1)),
         ]),
+        // Matches the AVTouchBar "Sakura" set: white fading through blossom pink to deep magenta.
+        Palette(name: "Sakura", stops: [
+            (0.00, NSColor(srgbRed: 1.000, green: 1.000, blue: 1.000, alpha: 1)),
+            (0.71, NSColor(srgbRed: 0.991, green: 0.542, blue: 0.807, alpha: 1)),
+            (1.00, NSColor(srgbRed: 0.986, green: 0.000, blue: 0.551, alpha: 1)),
+        ]),
+        // Matches the AVTouchBar "Fable Computer" set: cyan, green, violet, magenta, amber, red.
+        Palette(name: "Fable Computer", stops: [
+            (0.00, NSColor(srgbRed: 0.105, green: 0.833, blue: 0.999, alpha: 1)),
+            (0.18, NSColor(srgbRed: 0.135, green: 1.000, blue: 0.318, alpha: 1)),
+            (0.37, NSColor(srgbRed: 0.542, green: 0.394, blue: 0.999, alpha: 1)),
+            (0.53, NSColor(srgbRed: 0.962, green: 0.178, blue: 0.999, alpha: 1)),
+            (0.76, NSColor(srgbRed: 0.998, green: 0.896, blue: 0.494, alpha: 1)),
+            (1.00, NSColor(srgbRed: 0.986, green: 0.000, blue: 0.365, alpha: 1)),
+        ]),
     ]
 }
