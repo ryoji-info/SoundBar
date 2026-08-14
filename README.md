@@ -1,6 +1,6 @@
 # Touch Bar App: "SoundBar" \~Make the Touch Bar Cool Again!\~
 
-![SoundBar drawing live audio on the Touch Bar](docs/images/hero-live.gif)
+![Six SoundBar designs cycling on the Touch Bar, ten seconds each](docs/images/showcase.gif)
 
 When Apple discontinued the Touch Bar models of the MacBook series, many heavy users—especially developers—preferred physical function keys for efficient keyboard input. However, with the arrival of the AI age, developers have started using AI agents and vibe coding. Now we have a chance to revive the Touch Bar's capabilities as virtual keys for prompts and AI operations.
 
