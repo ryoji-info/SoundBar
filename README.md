@@ -29,13 +29,13 @@ Eleven of them, switchable from the menu bar or with a two-finger tap on the str
 ![Spectrum Bars ×2](docs/images/barsFine-Ice.png)
 
 **Spectrum Mirror**
-![Spectrum Mirror](docs/images/mirror-Ember.png)
+![Spectrum Mirror](docs/images/mirror-Fable_Computer.png)
 
 **Spectrum Mirror ×2**
 ![Spectrum Mirror ×2](docs/images/mirrorFine-Cotton_Candy.png)
 
 **Spectrum Blocks**
-![Spectrum Blocks](docs/images/blocks-Ember.png)
+![Spectrum Blocks](docs/images/blocks-Sakura.png)
 
 **Spectrum Peaks**
 ![Spectrum Peaks](docs/images/peaks-Meter.png)
