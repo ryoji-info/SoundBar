@@ -1,0 +1,141 @@
+SoundBar 1.0
+============
+
+An audio visualiser for the MacBook Pro Touch Bar. It wakes up on its own when sound
+starts playing or a microphone goes live, draws the spectrum across the whole strip, and
+hands the Touch Bar back to BetterTouchTool (or to macOS) when the sound stops.
+
+It runs as a background agent: no Dock icon, no window. Look for it in the menu bar.
+
+Project home: https://github.com/ryoji-info/SoundBar
+
+
+REQUIREMENTS
+------------
+  • A Touch Bar. Without one the app installs, runs, and has nothing to draw on. It talks
+    to the strip through DFRFoundation directly, so there is no fallback window.
+  • Apple Silicon. This build is arm64-only, which in practice means the 13-inch MacBook
+    Pro (M1, 2020) or (M2, 2022) — the only Touch Bar Macs with Apple Silicon.
+  • macOS 14.4 or later. A hard floor: SoundBar works out which apps are playing from
+    per-process CoreAudio properties that do not exist before 14.4.
+
+
+INSTALLING
+----------
+Double-click "Install SoundBar.command".
+
+It copies the app to /Applications, registers it to start at login, and launches it. The
+login agent has to name your home directory, which is why it is generated on your machine
+rather than shipped ready-made.
+
+You can instead drag SoundBar.app to the Applications folder. It will run when you open
+it, but it will NOT come back after a restart until you run the installer — there is no
+launch-at-login setting inside the app itself.
+
+
+IF MACOS REFUSES TO OPEN IT
+---------------------------
+This build is signed ad-hoc, not with a paid Apple Developer ID, and it is not notarised.
+If this disk image reached you over the web, AirDrop or email, macOS attached a quarantine
+flag, and a quarantined ad-hoc-signed app is refused outright:
+
+    "SoundBar is damaged and can't be opened. You should move it to the Trash."
+
+That wording means "unsigned and quarantined", not "corrupt download". Do not trash it.
+Clear the flag from the disk image before opening it:
+
+    xattr -dr com.apple.quarantine ~/Downloads/SoundBar.dmg
+
+or, if you already dragged the app across:
+
+    xattr -dr com.apple.quarantine /Applications/SoundBar.app
+
+Control-clicking and choosing Open used to work around this. On macOS 15 and later it does
+not — that escape hatch was removed. System Settings ▸ Privacy & Security sometimes offers
+an "Open Anyway" button after a blocked launch, but for the "damaged" case it usually does
+not appear at all. The xattr command above is the reliable fix.
+
+
+PERMISSIONS
+-----------
+  Screen & System Audio       REQUIRED. This is the one that matters. macOS files
+  Recording                   system-audio capture under Screen Recording even though
+                              SoundBar never reads the screen. Deny it and the Touch Bar
+                              shows a flat line: macOS still creates the audio tap and
+                              still calls back at full rate, but every sample arrives as
+                              0.0. It fails silently, with no error.
+
+  Microphone                  REQUIRED. Not only for the input meter — macOS checks this
+                              when the system-audio tap is created too.
+
+Nothing else is needed. Accessibility and Input Monitoring are NOT required.
+
+Automation (controlling BetterTouchTool) is optional and cosmetic — it only lets SoundBar
+name the Touch Bar group BTT restores afterwards.
+
+Nothing is recorded, written to disk, or sent anywhere. Audio is read, turned into bar
+heights, and thrown away.
+
+If the visualiser draws a flat line while music plays, the Screen & System Audio Recording
+grant is what to check first.
+
+
+USING IT
+--------
+Touch Bar gestures (each can be switched off in the menu):
+
+  one-finger tap     next colour palette
+  two-finger tap     next pattern
+  double tap         mute / unmute
+  long press         dismiss the visualiser
+  one-finger slide   volume
+
+Menu bar:
+
+  Pattern      11 of them — spectrum bars, fine bars, mirrored, mirrored fine, blocks,
+               peaks, dot-matrix, waveform, and three VU meters (centred, inward, outward).
+  Colour       7 built-in ramps: Rainbow (the default), Green, Spectrum, Ice, Ember,
+               Meter, Mono.
+  Behaviour    Fullscreen, what counts as a trigger, and Input Meter:
+                 Off         output only
+                 Auto        input only when nothing is playing
+                 Mix         output and input together — the video-call case (default)
+                 Input Only  microphone wins whenever it is live
+  Turn On/Off  In case a long press dismissed it and you want it back.
+
+More colours: SoundBar imports AVTouchBar-format colour sets. Drop them into
+"~/Downloads/AVTouchBar Custom Colors" and they are picked up and cached automatically.
+They are not bundled here — only the seven built-in ramps ship with the app.
+
+
+WHERE THINGS LIVE
+-----------------
+  /Applications/SoundBar.app
+  ~/Library/LaunchAgents/com.ryoji.SoundBar.plist
+  ~/Library/Logs/SoundBar/SoundBar.log
+  ~/Library/Application Support/SoundBar/Colors      (imported palettes)
+  Settings: defaults read com.ryoji.SoundBar
+
+A few tunables have no menu item — notably barCount, frameRate, and usableWidth (how much
+of the strip is actually visible on your machine, in points; the view is 1085 pt wide but
+rather less than that is on screen). Set them with:
+
+    defaults write com.ryoji.SoundBar <key> <value>
+
+They are re-read live.
+
+
+UPDATING
+--------
+Run the installer again over the top; your settings and imported palettes are kept.
+
+One wrinkle: because the signature is ad-hoc, macOS identifies the app by the exact hash
+of its code, so any build with even a one-byte change is a different app as far as privacy
+is concerned. After updating, if a permission looks enabled but nothing works, remove
+SoundBar from the list in System Settings with "−" and add it back.
+
+
+UNINSTALLING
+------------
+Double-click "Uninstall SoundBar.command". It stops the agent, removes the app and the
+login agent, and offers to delete your settings.
