@@ -440,6 +440,11 @@ the dimming today; it's left in so it starts working with no rebuild if a future
 (An earlier `CGEvent`-based attempt *did* have a display-sleep side effect with no benefit, and was
 removed.)
 
+While the option is off, nothing is posted at all: `Coordinator.settingsChanged` calls
+`TouchBarVisualizer.refreshKeepAwake`, which tears the 25 s ticker down the moment the box is
+unchecked rather than leaving it firing no-op ticks until the next present, and starts it again the
+moment it is re-checked while the strip is up.
+
 ## Known limits
 
 - **Apps that hold an output stream open while idle** keep the visualiser awake. There is no way to tell

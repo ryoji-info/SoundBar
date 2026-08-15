@@ -264,6 +264,9 @@ final class Coordinator {
         if visualising, hasDrawableSource(output: reason.output, input: reason.input) {
             syncCaptureSources()
         }
+        // Toggling "Keep Touch Bar Awake" has to reach the strip now rather than at the next
+        // present, so that unchecking it really does stop the ticker.
+        visualizer.refreshKeepAwake()
         evaluate()
     }
 

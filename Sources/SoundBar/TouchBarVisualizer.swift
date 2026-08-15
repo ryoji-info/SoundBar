@@ -208,6 +208,20 @@ final class TouchBarVisualizer: NSObject, NSTouchBarDelegate {
 
     private var keepAwakeWarned = false
 
+    /// Re-reads the option and brings the ticker into line with it, in both directions.
+    ///
+    /// Unchecking "Keep Touch Bar Awake" has to tear the timer down there and then. `keepAwakeTick`
+    /// does check the setting before posting, so an orphaned timer never actually signalled the
+    /// strip — but it stayed alive firing no-op ticks every 25 s until the next present, which is
+    /// precisely the machinery switching the option off is supposed to stop.
+    func refreshKeepAwake() {
+        if isPresenting, !screensAsleep {
+            startKeepAwake()        // no-ops after the teardown below when the option is off
+        } else {
+            stopKeepAwake()
+        }
+    }
+
     private func startKeepAwake() {
         stopKeepAwake()
         guard settings.keepTouchBarAwake else { return }
