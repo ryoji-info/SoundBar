@@ -62,7 +62,21 @@ final class TouchBarGestureRecognizer {
         var maxSpreadMM: Double = 0
         var longPressFired = false
         var committedToSlide = false
+        /// The strip was dark when this session began, so the touch is only waking it and must not
+        /// also be read as a gesture.
+        var wakeOnly = false
     }
+
+    /// Seconds the system had been idle immediately *before* the current touch, or `nil` if unknown.
+    ///
+    /// It has to be the value from before the touch: a real finger on the Touch Bar resets
+    /// `HIDIdleTime` about 67 ms before the contact reaches us (measured), so reading it here would
+    /// always report ~0 and never identify a wake.
+    var systemIdleBeforeTouch: (() -> Double?)?
+
+    /// Idle seconds past which the strip is assumed dark, so the next touch only wakes it. `0` keeps
+    /// every touch a gesture. macOS dims at roughly 75 s — measured wakes landed at 77.5 s idle.
+    var wakeTouchIdleThreshold: Double = 70
 
     private var contacts: [Int32: Contact] = [:]
     private var session: Session?
@@ -123,7 +137,9 @@ final class TouchBarGestureRecognizer {
             current.maxSpreadMM = max(current.maxSpreadMM, spreadMM)
 
             // Volume only responds to a single finger; two fingers is a tap gesture, not a drag.
-            if contacts.count == 1, settings.slideVolume {
+            // A wake touch is skipped entirely, so dragging a finger off the edge of a dark strip
+            // cannot move the volume either.
+            if contacts.count == 1, settings.slideVolume, !current.wakeOnly {
                 existing.pendingMM += dxMM
                 if spreadMM > slideCommitMM, !current.committedToSlide {
                     current.committedToSlide = true
@@ -145,8 +161,8 @@ final class TouchBarGestureRecognizer {
         // A new finger.
         contacts[sample.id] = Contact(id: sample.id, startTime: sample.timestamp,
                                       minX: sample.x, maxX: sample.x, lastX: sample.x, pendingMM: 0)
-        var current = session ?? Session(startTime: sample.timestamp)
         let isNewSession = (session == nil)
+        var current = session ?? newSession(startingAt: sample.timestamp)
         current.maxFingers = max(current.maxFingers, contacts.count)
         session = current
         if isNewSession {
@@ -156,6 +172,18 @@ final class TouchBarGestureRecognizer {
         if contacts.count > 1 {
             cancelLongPressTimer()
         }
+    }
+
+    /// Starts a session, deciding up front whether this touch is only waking a dark strip.
+    private func newSession(startingAt time: TimeInterval) -> Session {
+        var fresh = Session(startTime: time)
+        guard wakeTouchIdleThreshold > 0, let idle = systemIdleBeforeTouch?() else { return fresh }
+        if idle >= wakeTouchIdleThreshold {
+            fresh.wakeOnly = true
+            Log.info("touch", String(format: "strip was dark (%.0f s idle); this touch only wakes it",
+                                     idle))
+        }
+        return fresh
     }
 
     private func handleUp(_ sample: TouchSample) {
@@ -168,6 +196,10 @@ final class TouchBarGestureRecognizer {
 
     /// Decide what the just-finished session was.
     private func classify(_ session: Session, endedAt: TimeInterval) {
+        guard !session.wakeOnly else {
+            Log.debug("touch", "session ignored, it only woke the strip")
+            return
+        }
         guard !session.longPressFired, !session.committedToSlide else { return }
         guard session.maxSpreadMM <= settings.longPressMaxDrift else { return }
         let duration = endedAt - session.startTime
@@ -218,6 +250,7 @@ final class TouchBarGestureRecognizer {
             guard let self else { return }
             self.longPressTimer = nil
             guard var current = self.session, self.contacts.count == 1 else { return }
+            guard !current.wakeOnly else { return }
             guard !current.longPressFired, !current.committedToSlide else { return }
             guard current.maxSpreadMM <= self.settings.longPressMaxDrift else {
                 Log.debug("touch", "long press rejected, finger moved "
@@ -302,8 +335,13 @@ final class TouchBarGestureReader {
                 recognizer.surfaceWidthMM = width
             }
             recognizer.volumeSteps = settings.volumeSteps
+            recognizer.wakeTouchIdleThreshold = settings.wakeTouchIdleSeconds
+            recognizer.systemIdleBeforeTouch = { [weak self] in self?.consumeRecentIdle() }
+            if recognizer.wakeTouchIdleThreshold > 0 { startIdleSampling() }
             Log.info("touch", "Touch Bar gesture reader started (surface \(recognizer.surfaceWidthMM) mm wide, "
-                            + "\(recognizer.volumeSteps) volume steps per sweep)")
+                            + "\(recognizer.volumeSteps) volume steps per sweep, wake-touch guard "
+                            + (recognizer.wakeTouchIdleThreshold > 0
+                               ? "at \(Int(recognizer.wakeTouchIdleThreshold)) s idle" : "off") + ")")
         } else {
             Log.warn("touch", "could not open the Touch Bar digitiser")
         }
@@ -312,7 +350,78 @@ final class TouchBarGestureReader {
     func stop() {
         backend?.stop()
         backend = nil
+        idleSampler?.cancel()
+        idleSampler = nil
         recognizer.reset()
+    }
+
+    // MARK: - System idle sampling
+    //
+    // Needed because a finger on the Touch Bar resets `HIDIdleTime` ~67 ms before the contact reaches
+    // us — measured: reset at 18:40:19.335, first contact 18:40:19.402 — so by the time a gesture
+    // could ask, the evidence that the strip was dark is already gone. Sampling ahead of time keeps it.
+    //
+    // The samples are read as a *maximum over a short window* rather than "the previous sample":
+    // idle climbs monotonically until something resets it, so the max over the last few seconds is the
+    // pre-touch value whether or not a sample happened to land in the 67 ms gap. That removes the race
+    // rather than making it unlikely.
+
+    private var idleSampler: DispatchSourceTimer?
+    private var idleSamples: [(at: Date, idle: Double)] = []
+    private let idleSampleInterval = 2.0
+    private let idleWindow = 6.0
+
+    private func startIdleSampling() {
+        idleSampler?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: idleSampleInterval, leeway: .milliseconds(500))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            guard let idle = Self.systemIdleSeconds() else { return }
+            let now = Date()
+            self.idleSamples.append((at: now, idle: idle))
+            self.idleSamples.removeAll { now.timeIntervalSince($0.at) > self.idleWindow }
+        }
+        timer.resume()
+        idleSampler = timer
+    }
+
+    /// Longest idle seen in the recent window — the state the strip was in just before this touch.
+    private func recentIdleSeconds() -> Double? {
+        let cutoff = Date().addingTimeInterval(-idleWindow)
+        return idleSamples.filter { $0.at >= cutoff }.map(\.idle).max()
+    }
+
+    /// The pre-touch idle, forgetting the history if it says the strip was dark.
+    ///
+    /// Without the reset the same high sample would sit in the window for its full length, so the
+    /// *next* touch — the deliberate one the user makes once the strip is lit — would be read as
+    /// another wake and swallowed too. Clearing here means exactly one touch is ever absorbed.
+    private func consumeRecentIdle() -> Double? {
+        let value = recentIdleSeconds()
+        let threshold = recognizer.wakeTouchIdleThreshold
+        if threshold > 0, let value, value >= threshold {
+            idleSamples.removeAll()
+        }
+        return value
+    }
+
+    /// Seconds since the last keyboard, trackpad or Touch Bar input, from `IOHIDSystem`.
+    static func systemIdleSeconds() -> Double? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault,
+                                           IOServiceMatching("IOHIDSystem"),
+                                           &iterator) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(iterator) }
+        let entry = IOIteratorNext(iterator)
+        guard entry != 0 else { return nil }
+        defer { IOObjectRelease(entry) }
+        var properties: Unmanaged<CFMutableDictionary>?
+        guard IORegistryEntryCreateCFProperties(entry, &properties,
+                                                kCFAllocatorDefault, 0) == KERN_SUCCESS,
+              let dictionary = properties?.takeRetainedValue() as? [String: Any],
+              let nanoseconds = dictionary["HIDIdleTime"] as? UInt64 else { return nil }
+        return Double(nanoseconds) / 1_000_000_000
     }
 
     /// Make a one-finger slide change the volume.

@@ -88,6 +88,7 @@ final class Settings {
             Key.levelBoost: 12.0,
             Key.vuFloor: -40.0,
             Key.volumeSteps: 32,
+            Key.wakeTouchIdleSeconds: 70.0,
             Key.frameRate: 20.0,
             Key.usableWidth: 1000.0,
             Key.showMenuBarItem: true,
@@ -126,6 +127,7 @@ final class Settings {
         static let levelBoost = "levelBoost"
         static let vuFloor = "vuFloor"
         static let volumeSteps = "volumeSteps"
+        static let wakeTouchIdleSeconds = "wakeTouchIdleSeconds"
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
@@ -242,6 +244,16 @@ final class Settings {
     /// Clamped to 4…128. Past that a step is under 2 mm of travel, which is inside the noise of a
     /// finger moving across the digitiser.
     var volumeSteps: Int { min(128, max(4, defaults.integer(forKey: Key.volumeSteps))) }
+
+    /// Idle seconds past which a touch is treated as only waking the dark strip, not as a gesture.
+    ///
+    /// macOS dims the Touch Bar after about 75 s without input, and touching it to wake it would
+    /// otherwise land as a tap and cycle the colour. 70 leaves margin under the dim; `0` disables the
+    /// guard and makes every touch a gesture again.
+    ///
+    /// The idle figure is sampled ahead of the touch, because a finger on the strip resets
+    /// `HIDIdleTime` ~67 ms before the contact arrives.
+    var wakeTouchIdleSeconds: Double { max(0, defaults.double(forKey: Key.wakeTouchIdleSeconds)) }
 
     /// Redraw rate while visualising.
     ///
