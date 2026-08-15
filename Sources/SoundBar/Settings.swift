@@ -82,6 +82,7 @@ final class Settings {
             Key.doubleTapMutes: true,
             Key.keepTouchBarAwake: false,
             Key.frequencyTilt: 0.0,
+            Key.levelBoost: 0.0,
             Key.frameRate: 20.0,
             Key.usableWidth: 1000.0,
             Key.showMenuBarItem: true,
@@ -117,6 +118,7 @@ final class Settings {
         static let doubleTapMutes = "doubleTapMutes"
         static let keepTouchBarAwake = "keepTouchBarAwake"
         static let frequencyTilt = "frequencyTilt"
+        static let levelBoost = "levelBoost"
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
@@ -205,6 +207,13 @@ final class Settings {
     /// amplitude — and makes the treble end genuinely active. Clamped to ±12, beyond which the display
     /// is all floor or all ceiling.
     var frequencyTilt: Double { min(12, max(-12, defaults.double(forKey: Key.frequencyTilt))) }
+
+    /// Flat display gain in dB for the bars and the VU. Cosmetic only — it lifts how loud the audio
+    /// *looks*, and touches neither playback nor what is captured.
+    ///
+    /// The bars' window is 54 dB wide, so +6 is about 11 % of the strip's height and +12 about 22 %.
+    /// Clamped to ±24: past that the display is pinned at the ceiling and stops responding.
+    var levelBoost: Double { min(24, max(-24, defaults.double(forKey: Key.levelBoost))) }
 
     /// Redraw rate while visualising.
     ///

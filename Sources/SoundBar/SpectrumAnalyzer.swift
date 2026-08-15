@@ -92,6 +92,21 @@ final class SpectrumAnalyzer {
         set { lock.lock(); _tiltDBPerOctave = newValue; lock.unlock() }
     }
 
+    private var _levelBoostDB: Float = 0
+
+    /// A flat dB lift applied to every band *and* to the VU before the display window is applied —
+    /// i.e. it slides the whole `floorDB…ceilingDB` window down over the signal, so quiet material
+    /// fills more of the strip.
+    ///
+    /// Purely cosmetic: it changes how loud the audio *looks*, never what is captured or played. The
+    /// window spans 54 dB for the bars, so +6 is worth about 11 % of the strip's height.
+    ///
+    /// Written from the main thread, read on the audio thread, hence the locked accessor.
+    var levelBoostDB: Float {
+        get { lock.lock(); defer { lock.unlock() }; return _levelBoostDB }
+        set { lock.lock(); _levelBoostDB = newValue; lock.unlock() }
+    }
+
     init(fftSize: Int = 4096, barCount: Int = 44) {
         self.fftSize = fftSize
         self.halfSize = fftSize / 2
@@ -224,9 +239,11 @@ final class SpectrumAnalyzer {
             vDSP_measqv(samples + 1, vDSP_Stride(channels), &sumR, vDSP_Length(frames))
         }
 
+        // Same cosmetic lift as the bars, so the VU styles do not read quiet next to them.
+        let boost = levelBoostDB
         func normalised(_ meanSquare: Float) -> Float {
             let rms = sqrt(max(meanSquare, 0))
-            let db = 20 * log10(max(rms, 1e-9))
+            let db = 20 * log10(max(rms, 1e-9)) + boost
             return min(1, max(0, (db - vuFloorDB) / (vuCeilingDB - vuFloorDB)))
         }
         let targetL = normalised(sumL)
@@ -312,7 +329,8 @@ final class SpectrumAnalyzer {
         vDSP_vsmul(magnitudes, 1, &scale, &magnitudes, 1, vDSP_Length(halfSize))
 
         let ranges = bandRanges()
-        let tilt = tiltDBPerOctave                       // read once; locked accessor
+        let tilt = tiltDBPerOctave                       // read once; locked accessors
+        let boost = levelBoostDB
         let binWidth = Float(sampleRate) / Float(fftSize)
         var frameLevels = [Float](repeating: 0, count: ranges.count)
         for (index, range) in ranges.enumerated() {
@@ -321,7 +339,7 @@ final class SpectrumAnalyzer {
                 peak = max(peak, magnitudes[bin])
             }
             // dBFS, then mapped onto 0...1 across the display window.
-            var db = 20 * log10(max(peak, 1e-9))
+            var db = 20 * log10(max(peak, 1e-9)) + boost
             if tilt != 0 {
                 // Spectral tilt, pivoting at 1 kHz so mids are left where they are: bands above the
                 // pivot are lifted, bands below are cut. Music is heavily bass-weighted, so an untilted
