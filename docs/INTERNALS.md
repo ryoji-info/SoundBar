@@ -290,12 +290,18 @@ another app draws on the strip. Measured: family 176, **232.1 × 8.1 mm** (track
 | One-finger tap | 1 finger, < 300 ms, ≤ 4 mm, no second tap follows | next colour |
 | One-finger double tap | two such taps within 320 ms | mute / unmute |
 | Two-finger tap | 2 fingers, < 300 ms, ≤ 4 mm | next pattern |
-| Long press | 1 finger, ≥ 450 ms, ≤ 4 mm | toggle the visualiser |
+| Long press | 1 finger, ≥ 450 ms, ≤ 4 mm | toggle the visualiser (see below) |
 | Slide | 1 finger, > 5 mm of travel | volume, ±1 step per 14.5 mm |
 
 Recognition works on *touch sessions* — from the first finger landing to the last one lifting — rather
 than per contact. Deciding at the end of a session is what makes the one- and two-finger taps cleanly
 separable, because only then is the highest simultaneous finger count known.
+
+The long press **toggles** rather than only stopping: it shares `toggleManually` with the menu, so the
+override bookkeeping — armed on stop, cleared on start — cannot drift between the two routes. It is
+guarded on `enabled`, because `evaluate` tears the visualiser down whenever that is false and a press
+would otherwise flash it up and lose it at the next evaluation; turning SoundBar back on stays the
+menu's job.
 
 The gestures cannot collide: a tap must lift before 300 ms, a long press only fires after 450 ms, and
 any real movement arms the slide and disqualifies both. A single tap is necessarily delayed by the
@@ -303,6 +309,32 @@ any real movement arms the slide and disqualifies both. A single tap is necessar
 
 Only `x` is used — the digitiser has two sensor rows across 8.1 mm, so `y` is too coarse to threshold
 on. Measured on a real finger: `single tap (67 ms, 0.2 mm) -> colour 'Ocean Blue'`.
+
+### The touch that only wakes the strip
+
+macOS dims the Touch Bar after about 75 s without input, and the touch you make to wake it arrives as
+an ordinary contact — so it used to land as a tap and cycle the colour.
+
+There is no API for the dim state: `DFRGetStatus()` returns a constant `5` whether the strip is lit or
+has been dark for 199 s. What does track it is `HIDIdleTime`, since the dim is driven by exactly the
+same keyboard/trackpad/Touch Bar input.
+
+The catch is timing. A finger on the strip resets `HIDIdleTime` **before** the contact reaches us —
+measured at 67 ms, reset at `18:40:19.335` against first contact at `18:40:19.402` — so reading the
+counter when a touch arrives always reports ~0 and never identifies a wake. It is therefore sampled
+every 2 s in the background and read as the **maximum over a 6 s window**: idle climbs monotonically
+until something resets it, so that maximum is the pre-touch value whether or not a sample happened to
+land inside the 67 ms gap. That removes the race rather than making it unlikely.
+
+A session flagged this way suppresses everything — tap, double tap, two-finger tap, long press and
+slide. The sample history is cleared as soon as a wake is recognised, so exactly one touch is absorbed
+and the next, deliberate one behaves normally; without that the same high sample would sit in the
+window for its full length and swallow the second touch too.
+
+`wakeTouchIdleSeconds` (default `70`, under the ~75 s dim for margin) sets the threshold; `0` disables
+the guard.
+
+### Slide
 
 The slide accumulates travel and emits whole steps, keeping the remainder so a slow drag does not lose
 ground to rounding. `volumeSteps` (default `32`) sets how many steps one full-width sweep is worth, and
@@ -370,6 +402,7 @@ defaults write com.ryoji.SoundBar paletteName -string rainbow
 | `longPressMaxDrift` | `4.0` | Millimetres still counted as a stationary press |
 | `slideVolume` | `true` | Slide controls volume |
 | `volumeSteps` | `32` | Volume steps per full-width sweep; 16 matches the volume keys (4–128) |
+| `wakeTouchIdleSeconds` | `70` | Idle seconds past which a touch only wakes the dark strip; `0` disables |
 | `checkBTTAfterStop` | `true` | Verify BetterTouchTool got the strip back |
 | `extraExcludedBundleIDs` | — | Apps whose audio should not count |
 | `verboseLogging` | `false` | Debug detail in the log |
