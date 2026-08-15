@@ -83,6 +83,7 @@ final class Settings {
             Key.keepTouchBarAwake: false,
             Key.frequencyTilt: 0.0,
             Key.levelBoost: 0.0,
+            Key.vuFloor: -40.0,
             Key.frameRate: 20.0,
             Key.usableWidth: 1000.0,
             Key.showMenuBarItem: true,
@@ -119,6 +120,7 @@ final class Settings {
         static let keepTouchBarAwake = "keepTouchBarAwake"
         static let frequencyTilt = "frequencyTilt"
         static let levelBoost = "levelBoost"
+        static let vuFloor = "vuFloor"
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
@@ -208,12 +210,26 @@ final class Settings {
     /// is all floor or all ceiling.
     var frequencyTilt: Double { min(12, max(-12, defaults.double(forKey: Key.frequencyTilt))) }
 
-    /// Flat display gain in dB for the bars and the VU. Cosmetic only — it lifts how loud the audio
+    /// Flat display gain in dB for the spectrum bars. Cosmetic only — it lifts how loud the audio
     /// *looks*, and touches neither playback nor what is captured.
     ///
     /// The bars' window is 54 dB wide, so +6 is about 11 % of the strip's height and +12 about 22 %.
     /// Clamped to ±24: past that the display is pinned at the ceiling and stops responding.
+    ///
+    /// Does **not** apply to the VU styles — their scale is narrower and saturates; use `vuFloor`.
     var levelBoost: Double { min(24, max(-24, defaults.double(forKey: Key.levelBoost))) }
+
+    /// The dB level the VU styles read as empty. The ceiling stays at -3 dBFS, so this sets how wide
+    /// the meter's scale is: -40 gives a 37 dB sweep, which suits music.
+    ///
+    /// This is the VU's sensitivity control, and the only one — `levelBoost` deliberately skips the
+    /// VU, which saturates long before the bars do.
+    ///
+    /// Mind the direction: *lowering* it (more negative) widens the scale, so the same signal sits
+    /// further above the floor and the meter reads fuller. Raising it towards 0 narrows the scale, so
+    /// only louder passages register at all. Measured on one passage: -60 → 77 % of scale, -40 → 78 %,
+    /// -25 → 59 %.
+    var vuFloor: Double { min(-9, max(-90, defaults.double(forKey: Key.vuFloor))) }
 
     /// Redraw rate while visualising.
     ///

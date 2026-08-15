@@ -207,6 +207,9 @@ final class Coordinator {
         let boost = Float(settings.levelBoost)
         tap.analyzer.levelBoostDB = boost
         microphone.analyzer.levelBoostDB = boost
+        let vuFloor = Float(settings.vuFloor)
+        tap.analyzer.vuFloorDB = vuFloor
+        microphone.analyzer.vuFloorDB = vuFloor
         Log.debug("coordinator", "analysis bands: \(count) for '\(visualizer.style.displayName)'")
     }
 

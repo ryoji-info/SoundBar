@@ -45,8 +45,18 @@ final class SpectrumAnalyzer {
     private var peakRightAge: Double = 0
 
     /// VU maps this dB window onto 0...1. -40 dBFS is a sensible bottom for music.
-    private let vuFloorDB: Float = -42
     private let vuCeilingDB: Float = -3
+
+    private var _vuFloorDB: Float = -40
+
+    /// The dB the VU reads as empty. Lowering it (more negative) widens the scale and the meter reads
+    /// fuller; raising it towards 0 narrows the scale so only louder passages register.
+    ///
+    /// Written from the main thread, read on the audio thread, hence the locked accessor.
+    var vuFloorDB: Float {
+        get { lock.lock(); defer { lock.unlock() }; return _vuFloorDB }
+        set { lock.lock(); _vuFloorDB = min(vuCeilingDB - 6, newValue); lock.unlock() }
+    }
 
     /// Peaks sit still this long before they start sliding back down.
     private let peakHoldSeconds: Double = 1.1
@@ -239,12 +249,16 @@ final class SpectrumAnalyzer {
             vDSP_measqv(samples + 1, vDSP_Stride(channels), &sumR, vDSP_Length(frames))
         }
 
-        // Same cosmetic lift as the bars, so the VU styles do not read quiet next to them.
-        let boost = levelBoostDB
+        // Deliberately NOT lifted by `levelBoostDB`: the VU's window is only 37 dB against the bars'
+        // 54, and it already sits far closer to its ceiling for ordinary music, so the same boost that
+        // usefully lifts the bars pins the needle at 100 % and the meter stops moving at all
+        // (measured: +12 dB gave a permanently full meter on both channels). Sensitivity here is
+        // `vuFloorDB`'s job instead — raise it towards 0 to make quiet material read higher.
+        let floor = vuFloorDB          // read once: the accessor takes the lock
         func normalised(_ meanSquare: Float) -> Float {
             let rms = sqrt(max(meanSquare, 0))
-            let db = 20 * log10(max(rms, 1e-9)) + boost
-            return min(1, max(0, (db - vuFloorDB) / (vuCeilingDB - vuFloorDB)))
+            let db = 20 * log10(max(rms, 1e-9))
+            return min(1, max(0, (db - floor) / (vuCeilingDB - floor)))
         }
         let targetL = normalised(sumL)
         let targetR = normalised(sumR)
