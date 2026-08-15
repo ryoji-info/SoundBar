@@ -78,6 +78,20 @@ final class SpectrumAnalyzer {
     private let minFrequency = 20.0
     private let maxFrequency = 20_000.0
 
+    /// The frequency the spectral tilt rotates about — bands here are untouched whatever the tilt.
+    private let tiltPivotHz = 1_000.0
+
+    private var _tiltDBPerOctave: Float = 0
+
+    /// dB added per octave above `tiltPivotHz` (and subtracted per octave below it) before a band
+    /// becomes a bar height. `0` leaves the spectrum alone; `+6` is exactly `level × frequency`.
+    ///
+    /// Written from the main thread and read on the audio thread, hence the locked accessor.
+    var tiltDBPerOctave: Float {
+        get { lock.lock(); defer { lock.unlock() }; return _tiltDBPerOctave }
+        set { lock.lock(); _tiltDBPerOctave = newValue; lock.unlock() }
+    }
+
     init(fftSize: Int = 4096, barCount: Int = 44) {
         self.fftSize = fftSize
         self.halfSize = fftSize / 2
@@ -298,6 +312,8 @@ final class SpectrumAnalyzer {
         vDSP_vsmul(magnitudes, 1, &scale, &magnitudes, 1, vDSP_Length(halfSize))
 
         let ranges = bandRanges()
+        let tilt = tiltDBPerOctave                       // read once; locked accessor
+        let binWidth = Float(sampleRate) / Float(fftSize)
         var frameLevels = [Float](repeating: 0, count: ranges.count)
         for (index, range) in ranges.enumerated() {
             var peak: Float = 0
@@ -305,7 +321,17 @@ final class SpectrumAnalyzer {
                 peak = max(peak, magnitudes[bin])
             }
             // dBFS, then mapped onto 0...1 across the display window.
-            let db = 20 * log10(max(peak, 1e-9))
+            var db = 20 * log10(max(peak, 1e-9))
+            if tilt != 0 {
+                // Spectral tilt, pivoting at 1 kHz so mids are left where they are: bands above the
+                // pivot are lifted, bands below are cut. Music is heavily bass-weighted, so an untilted
+                // display leans left; this evens it out.
+                //
+                // The scale is dB per octave, and +6 is exactly `level × frequency` — doubling the
+                // frequency doubles the amplitude, since 20·log10(2) ≈ 6.02 dB.
+                let centre = (Float(range.lowerBound) + Float(range.upperBound)) * 0.5 * binWidth
+                db += tilt * log2(max(centre, 1) / Float(tiltPivotHz))
+            }
             frameLevels[index] = min(1, max(0, (db - floorDB) / (ceilingDB - floorDB)))
         }
 

@@ -81,6 +81,7 @@ final class Settings {
             Key.tapCyclesStyle: true,
             Key.doubleTapMutes: true,
             Key.keepTouchBarAwake: false,
+            Key.frequencyTilt: 0.0,
             Key.frameRate: 20.0,
             Key.usableWidth: 1000.0,
             Key.showMenuBarItem: true,
@@ -115,6 +116,7 @@ final class Settings {
         static let tapCyclesStyle = "tapCyclesStyle"
         static let doubleTapMutes = "doubleTapMutes"
         static let keepTouchBarAwake = "keepTouchBarAwake"
+        static let frequencyTilt = "frequencyTilt"
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
@@ -195,6 +197,14 @@ final class Settings {
     /// TouchBarVisualizer for the full set of approaches tried). Left as a switch so it takes effect
     /// with no rebuild if a future OS honours the attempt; it has no side effects when it fails.
     var keepTouchBarAwake: Bool { defaults.bool(forKey: Key.keepTouchBarAwake) }
+
+    /// Spectral tilt in dB per octave, pivoting at 1 kHz, applied before a band becomes a bar height.
+    ///
+    /// `0` (the default) shows the spectrum as measured, which leans left because music carries most
+    /// of its energy in the bass. `+6` is `level × frequency` — each doubling of frequency doubles the
+    /// amplitude — and makes the treble end genuinely active. Clamped to ±12, beyond which the display
+    /// is all floor or all ceiling.
+    var frequencyTilt: Double { min(12, max(-12, defaults.double(forKey: Key.frequencyTilt))) }
 
     /// Redraw rate while visualising.
     ///

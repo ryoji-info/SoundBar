@@ -201,6 +201,9 @@ final class Coordinator {
         let count = settings.barCount * visualizer.style.bandMultiplier
         tap.analyzer.setBarCount(count)
         microphone.analyzer.setBarCount(count)
+        let tilt = Float(settings.frequencyTilt)
+        tap.analyzer.tiltDBPerOctave = tilt
+        microphone.analyzer.tiltDBPerOctave = tilt
         Log.debug("coordinator", "analysis bands: \(count) for '\(visualizer.style.displayName)'")
     }
 
