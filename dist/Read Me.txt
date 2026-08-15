@@ -1,5 +1,5 @@
-SoundBar 1.1.1
-==============
+SoundBar 1.2
+============
 
 An audio visualiser for the MacBook Pro Touch Bar. It wakes up on its own when sound
 starts playing or a microphone goes live, draws the spectrum across the whole strip, and

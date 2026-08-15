@@ -189,6 +189,35 @@ The choice persists, so the pattern you leave it on is the one you get next time
 `--render-preview` draws every pattern to a PNG without needing a Touch Bar, which is how the layouts
 were checked (`--zoom 5` for a close look, `--ramp` for a clean left-to-right test signal).
 
+### Shaping the response
+
+Two knobs sit between the FFT and the bar heights, and they do different jobs.
+
+**`frequencyTilt`** (dB per octave, default `3`) rotates the spectrum about a 1 kHz pivot before each
+band is mapped onto a bar: bands above the pivot are lifted, bands below are cut. Music carries most of
+its energy in the bass, so an untilted display leans heavily left and the treble end barely moves.
+Measured on one passage, as the ratio of lit pixels in the right third of the strip to the left third:
+
+| tilt | treble/bass |
+|---|---|
+| `0` | 0.27 |
+| `3` | 0.75 |
+| `6` | 1.59 |
+
+`+6` is exactly *level × frequency* — each doubling of frequency doubles the amplitude — but it
+overshoots flat into treble-dominance. `+3` measures closest to even, which is why it is the default.
+
+**`levelBoost`** (dB, default `12`) is a flat lift that slides the whole display window down over the
+signal, so quiet material fills more of the strip: mean bar height went 16 → 22 px of the 30 pt strip,
+with peaks still short of the ceiling.
+
+It deliberately does **not** apply to the VU styles. Their window is 37 dB against the bars' 54 and
+they sit closer to the ceiling for ordinary music, so the same +12 pinned both channels at 100 % and
+the meter stopped moving altogether. VU sensitivity is `vuFloor`'s job instead — and note its
+direction: *lowering* it widens the scale and the meter reads fuller.
+
+Both are cosmetic. Neither touches playback nor what is captured.
+
 ### Colours
 
 Nine ramps are built in: Rainbow (the default), Green, Spectrum, Ice, Ember, Meter, Mono, Sakura, Fable
@@ -316,11 +345,14 @@ defaults write com.ryoji.SoundBar paletteName -string rainbow
 | `barCount` | `44` | Bars across the strip |
 | `barWidthFraction` | `0.62` | Bar width vs gap |
 | `fineBarWidthFraction` | `0.88` | Bar width vs gap for the ×2 patterns |
-| `paletteName` | `Green` | Any ramp from `--list-palettes` (case-insensitive) |
+| `paletteName` | `Rainbow` | Any ramp from `--list-palettes` (case-insensitive) |
 | `style` | `bars` | `bars`, `barsFine`, `mirror`, `mirrorFine`, `blocks`, `peaks`, `dots`, `wave`, `vu`, `vuInward`, `vuOutward` |
 | `tapCyclesStyle` | `true` | Taps change colour (one finger) and pattern (two fingers) |
 | `doubleTapMutes` | `true` | A one-finger double tap mutes |
 | `keepTouchBarAwake` | `false` | Best-effort anti-dim; does not work on this macOS (see above) |
+| `frequencyTilt` | `3` | dB per octave about a 1 kHz pivot, applied before a band becomes a bar (±12) |
+| `levelBoost` | `12` | Flat cosmetic dB gain for the bars — **not** the VU (±24) |
+| `vuFloor` | `-40` | dB the VU styles read as empty; the ceiling is fixed at −3 dBFS |
 | `showMenuBarItem` | `true` | Show the menu bar icon |
 | `frameRate` | `20` | Redraw rate while visualising (10–60) |
 | `usableWidth` | `1000` | Visible width of the Touch Bar in points (the view is 1085 but clips at ~1005) |
