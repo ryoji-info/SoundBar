@@ -304,6 +304,13 @@ any real movement arms the slide and disqualifies both. A single tap is necessar
 Only `x` is used — the digitiser has two sensor rows across 8.1 mm, so `y` is too coarse to threshold
 on. Measured on a real finger: `single tap (67 ms, 0.2 mm) -> colour 'Ocean Blue'`.
 
+The slide accumulates travel and emits whole steps, keeping the remainder so a slow drag does not lose
+ground to rounding. `volumeSteps` (default `32`) sets how many steps one full-width sweep is worth, and
+the step distance is *derived* from the measured surface width rather than hard-coded — `232.1 mm / 32
+= 7.25 mm` per step. The volume change per step is `1 / volumeSteps`, so the two always agree and a
+full sweep lands on exactly 0 % or 100 % whatever the setting. 16 would match the granularity of the
+volume keys; 32 is twice as fine, which the strip has ample room to resolve.
+
 ## Permissions
 
 | Permission | Needed for | Required? |
@@ -362,6 +369,7 @@ defaults write com.ryoji.SoundBar paletteName -string rainbow
 | `longPressDuration` | `0.45` | Seconds |
 | `longPressMaxDrift` | `4.0` | Millimetres still counted as a stationary press |
 | `slideVolume` | `true` | Slide controls volume |
+| `volumeSteps` | `32` | Volume steps per full-width sweep; 16 matches the volume keys (4–128) |
 | `checkBTTAfterStop` | `true` | Verify BetterTouchTool got the strip back |
 | `extraExcludedBundleIDs` | — | Apps whose audio should not count |
 | `verboseLogging` | `false` | Debug detail in the log |

@@ -87,6 +87,7 @@ final class Settings {
             Key.frequencyTilt: 3.0,
             Key.levelBoost: 12.0,
             Key.vuFloor: -40.0,
+            Key.volumeSteps: 32,
             Key.frameRate: 20.0,
             Key.usableWidth: 1000.0,
             Key.showMenuBarItem: true,
@@ -124,6 +125,7 @@ final class Settings {
         static let frequencyTilt = "frequencyTilt"
         static let levelBoost = "levelBoost"
         static let vuFloor = "vuFloor"
+        static let volumeSteps = "volumeSteps"
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
@@ -233,6 +235,13 @@ final class Settings {
     /// only louder passages register at all. Measured on one passage: -60 → 77 % of scale, -40 → 78 %,
     /// -25 → 59 %.
     var vuFloor: Double { min(-9, max(-90, defaults.double(forKey: Key.vuFloor))) }
+
+    /// How many volume steps one full-width slide covers. 16 matches the volume keys; 32 (the default)
+    /// is twice as fine, which the strip's 232 mm has plenty of room to resolve.
+    ///
+    /// Clamped to 4…128. Past that a step is under 2 mm of travel, which is inside the noise of a
+    /// finger moving across the digitiser.
+    var volumeSteps: Int { min(128, max(4, defaults.integer(forKey: Key.volumeSteps))) }
 
     /// Redraw rate while visualising.
     ///

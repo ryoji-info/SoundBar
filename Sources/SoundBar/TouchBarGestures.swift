@@ -75,9 +75,20 @@ final class TouchBarGestureRecognizer {
     /// (232.1 mm on this MacBook Pro); the default is only a fallback.
     var surfaceWidthMM = 232.0
 
-    /// Millimetres of travel per volume step. A full 232 mm sweep covers 0–100 % in 16 steps, matching
-    /// the granularity of the volume keys.
-    private let millimetresPerVolumeStep = 14.5
+    /// How many steps a full-width sweep is divided into — and therefore how finely the slide can set
+    /// the volume, since one step is `1 / volumeSteps` of the range.
+    ///
+    /// 16 matches the granularity of the volume keys; the default of 32 is deliberately finer, because
+    /// the strip is long enough to resolve it (7.3 mm of travel per step at 232 mm) and the keys are
+    /// already there for coarse changes.
+    var volumeSteps = 32
+
+    /// Millimetres of travel per volume step, derived so that one sweep of the strip is exactly the
+    /// full range whatever `volumeSteps` is. Deriving it from the measured surface width rather than
+    /// hard-coding a distance also keeps it honest if the digitiser reports something unexpected.
+    private var millimetresPerVolumeStep: Double {
+        max(1.0, surfaceWidthMM / Double(max(1, volumeSteps)))
+    }
 
     /// Travel beyond this commits the session to being a slide, cancelling every tap and the long press.
     private let slideCommitMM = 5.0
@@ -290,7 +301,9 @@ final class TouchBarGestureReader {
             if let width = source.surfaceWidthMM {
                 recognizer.surfaceWidthMM = width
             }
-            Log.info("touch", "Touch Bar gesture reader started (surface \(recognizer.surfaceWidthMM) mm wide)")
+            recognizer.volumeSteps = settings.volumeSteps
+            Log.info("touch", "Touch Bar gesture reader started (surface \(recognizer.surfaceWidthMM) mm wide, "
+                            + "\(recognizer.volumeSteps) volume steps per sweep)")
         } else {
             Log.warn("touch", "could not open the Touch Bar digitiser")
         }
@@ -308,7 +321,9 @@ final class TouchBarGestureReader {
     /// volume to the *default output device* — which by then was the aggregate it had installed, and an
     /// aggregate exposes no volume control. `VolumeController` resolves through to the real hardware.
     private func applyVolumeSlide(_ steps: Double) {
-        let delta = Float(steps / 16.0)
+        // One step is 1/volumeSteps of the range, so this must track the recogniser's own divisor —
+        // otherwise a full sweep would no longer land on exactly 0 % or 100 %.
+        let delta = Float(steps / Double(max(1, recognizer.volumeSteps)))
         if let newVolume = VolumeController.adjustVolume(by: delta) {
             Log.debug("touch", "slide \(Int(steps)) step(s) -> volume \(String(format: "%.2f", newVolume))")
         } else {
