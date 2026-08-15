@@ -87,7 +87,7 @@ Touch Bar gestures (each can be switched off in the menu):
   one-finger tap     next colour palette
   two-finger tap     next pattern
   double tap         mute / unmute
-  long press         dismiss the visualiser
+  long press         toggle the visualiser off, or back on
   one-finger slide   volume
 
 Menu bar:
@@ -101,7 +101,7 @@ Menu bar:
                  Auto        input only when nothing is playing
                  Mix         output and input together — the video-call case (default)
                  Input Only  microphone wins whenever it is live
-  Turn On/Off  In case a long press dismissed it and you want it back.
+  Turn On/Off  Another way back if a long press dismissed it.
 
 More colours: SoundBar imports AVTouchBar-format colour sets. Drop them into
 "~/Downloads/AVTouchBar Custom Colors" and they are picked up and cached automatically.

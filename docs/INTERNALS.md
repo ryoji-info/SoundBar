@@ -290,7 +290,7 @@ another app draws on the strip. Measured: family 176, **232.1 × 8.1 mm** (track
 | One-finger tap | 1 finger, < 300 ms, ≤ 4 mm, no second tap follows | next colour |
 | One-finger double tap | two such taps within 320 ms | mute / unmute |
 | Two-finger tap | 2 fingers, < 300 ms, ≤ 4 mm | next pattern |
-| Long press | 1 finger, ≥ 450 ms, ≤ 4 mm | stop the visualiser |
+| Long press | 1 finger, ≥ 450 ms, ≤ 4 mm | toggle the visualiser |
 | Slide | 1 finger, > 5 mm of travel | volume, ±1 step per 14.5 mm |
 
 Recognition works on *touch sessions* — from the first finger landing to the last one lifting — rather
@@ -365,7 +365,7 @@ defaults write com.ryoji.SoundBar paletteName -string rainbow
 | `usableWidth` | `1000` | Visible width of the Touch Bar in points (the view is 1085 but clips at ~1005) |
 | `inputMode` | `mix` | What a live mic shows: `off`, `auto`, `mix`, `input` (see below) |
 | `inputGain` | `1.0` | Multiplies the mic's contribution before mixing (0.1–8) |
-| `longPressStopsATB` | `true` | Long press stops the visualiser (legacy key name) |
+| `longPressStopsATB` | `true` | Long press toggles the visualiser (legacy key name) |
 | `longPressDuration` | `0.45` | Seconds |
 | `longPressMaxDrift` | `4.0` | Millimetres still counted as a stationary press |
 | `slideVolume` | `true` | Slide controls volume |

@@ -174,17 +174,25 @@ final class Coordinator {
 
     // MARK: - Touch Bar gestures
 
-    /// Long press: stop the visualiser and stand down until audio restarts.
+    /// Long press: toggle the visualiser — stand it down if it is up, bring it back if it is not.
+    ///
+    /// Shares `toggleManually` with the menu rather than reimplementing the two halves, so the
+    /// override bookkeeping (armed on stop, cleared on start) cannot drift between the two routes.
     func handleLongPress() {
         guard settings.longPressStopsATB else { return }
-        guard visualising else {
-            Log.debug("coordinator", "long press ignored, not visualising")
+        // Switched off is switched off: `evaluate` stops the visualiser whenever `enabled` is false,
+        // so starting one here would flash it up and lose it again at the next evaluation. The menu
+        // hides "Start Visualiser Now" for the same reason — turning SoundBar back on is its job.
+        guard settings.enabled else {
+            Log.debug("coordinator", "long press ignored, SoundBar is switched off")
             return
         }
-        Log.info("coordinator", "long press -> stopping visualiser (manual override armed)")
-        manualOverride = true
-        cancelTimers()
-        stopNow()
+        if visualising {
+            Log.info("coordinator", "long press -> stopping visualiser (manual override armed)")
+        } else {
+            Log.info("coordinator", "long press -> starting visualiser")
+        }
+        toggleManually()
     }
 
     /// Choose a specific pattern (from the menu, or by two-finger tap).

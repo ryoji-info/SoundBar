@@ -257,12 +257,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         submenu.addItem(header("One-finger tap — next colour"))
         submenu.addItem(header("Two-finger tap — next pattern"))
         submenu.addItem(header("Double tap — mute"))
-        submenu.addItem(header("Long press — stop visualiser"))
+        submenu.addItem(header("Long press — toggle visualiser"))
         submenu.addItem(header("One-finger slide — volume"))
         submenu.addItem(.separator())
         submenu.addItem(check("Taps Change Colour and Pattern", #selector(toggleTapCycles), settings.tapCyclesStyle))
         submenu.addItem(check("Double Tap Mutes", #selector(toggleDoubleTapMutes), settings.doubleTapMutes))
-        submenu.addItem(check("Long Press Stops", #selector(toggleLongPress), settings.longPressStopsATB))
+        submenu.addItem(check("Long Press Toggles", #selector(toggleLongPress), settings.longPressStopsATB))
         submenu.addItem(check("Slide Controls Volume", #selector(toggleSlideVolume), settings.slideVolume))
         parent.submenu = submenu
         return parent

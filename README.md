@@ -13,7 +13,7 @@ If you enjoy it, please consider buying me a coffee ❤️, at <https://ko-fi.co
 - **Wakes up on its own.** When any app starts playing sound — or a microphone goes live — SoundBar takes over the Touch Bar and draws the audio in real time. When the sound stops, it hands the Touch Bar back to BetterTouchTool or macOS.
 - **Hears everything, changes nothing.** Audio is captured with a macOS *process tap* on a private aggregate device: no loopback driver, no BlackHole, no changes to your output device, and the volume keys keep working. Nothing is recorded or sent anywhere — samples are turned into bar heights and thrown away.
 - **Input, output, or both.** On a call, the meter can show your speakers, your microphone, or a live mix of the two (the default), so you can see yourself being heard while you listen.
-- **Touch to control.** Tap the strip to change colours, two-finger tap to change patterns, double-tap to mute, long-press to dismiss, and slide with one finger for volume.
+- **Touch to control.** Tap the strip to change colours, two-finger tap to change patterns, double-tap to mute, long-press to toggle the visualiser, and slide with one finger for volume.
 - **Lightweight.** A single ~600 KB binary, no Dock icon, a few percent of one core while drawing and idle detection driven by CoreAudio events, not polling.
 
 > **Accessibility note:** macOS dims the Touch Bar after **75 seconds** without keyboard, trackpad or Touch Bar input, and wakes it on the next touch. That timer belongs to the system's TouchBarServer and is not exposed to apps, so SoundBar keeps drawing underneath but cannot keep the strip lit.
@@ -104,7 +104,7 @@ The menu bar note ♪ holds everything: pattern, colour, on/off, and behaviour.
 | One-finger tap | Next colour |
 | Two-finger tap | Next pattern |
 | Double tap | Mute / unmute |
-| Long press | Dismiss the visualiser until audio restarts |
+| Long press | Toggle the visualiser off, or back on |
 | One-finger slide | Volume |
 
 **Behaviour ▸ Input Meter** decides what a live microphone shows: **Off (output only)**, **Only When Nothing Is Playing**, **Mix Input and Output** (the default, made for video calls), or **Input Takes Priority**.
