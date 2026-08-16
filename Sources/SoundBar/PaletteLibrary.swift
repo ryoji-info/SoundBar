@@ -52,7 +52,21 @@ struct Palette {
         return colors
     }
 
-    /// Keyed by palette name and count. Only ever touched on the main thread, from drawing.
+    /// Like `cgColors(count:)` but with an alpha applied, for the dimmed "unlit" variants the blocks,
+    /// peaks and dots styles draw. These were rebuilt with `copy(alpha:)` on every frame — up to one
+    /// per bar per frame in peaks — for an answer that only changes with the palette or count.
+    func cgColors(count: Int, alpha: CGFloat) -> [CGColor] {
+        let count = max(1, count)
+        let key = "\(name)|\(count)|\(alpha)"
+        if let cached = Palette.cgColorCache[key] { return cached }
+        let colors = cgColors(count: count).map { $0.copy(alpha: alpha) ?? $0 }
+        if Palette.cgColorCache.count > 64 { Palette.cgColorCache.removeAll() }
+        Palette.cgColorCache[key] = colors
+        return colors
+    }
+
+    /// Keyed by palette name, count, and (for the dimmed variants) alpha. Only ever touched on the
+    /// main thread, from drawing.
     private static var cgColorCache: [String: [CGColor]] = [:]
 
     /// Gradients are likewise rebuilt every frame otherwise.

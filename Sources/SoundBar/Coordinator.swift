@@ -67,6 +67,12 @@ final class Coordinator {
         visualizer.frameProvider = { [weak self] in
             self?.currentFrame() ?? emptyVisualFrameData
         }
+
+        // An unplugged microphone tears its capture down; re-sync so the surviving mic takes over.
+        microphone.onDeviceDied = { [weak self] in
+            guard let self, self.visualising else { return }
+            self.syncCaptureSources()
+        }
     }
 
     var isVisualising: Bool { visualising }
@@ -261,7 +267,11 @@ final class Coordinator {
 
     func toggleManually() {
         if visualising {
-            manualOverride = true
+            // Arm the override only when something would actually restart the visualiser. A dismissal
+            // during the stop fade — audio already idle — must not arm it: with no idle edge left to
+            // clear it (`evaluate`'s else-branch never runs again), the override would silently
+            // swallow the auto-start for the whole of the next track.
+            manualOverride = hasDrawableSource(output: reason.output, input: reason.input)
             cancelTimers()
             stopNow()
         } else {
@@ -282,8 +292,10 @@ final class Coordinator {
             syncCaptureSources()
         }
         // Toggling "Keep Touch Bar Awake" has to reach the strip now rather than at the next
-        // present, so that unchecking it really does stop the ticker.
+        // present, so that unchecking it really does stop the ticker; likewise a frameRate change
+        // has to reach a live render loop.
         visualizer.refreshKeepAwake()
+        visualizer.refreshRenderRate()
         evaluate()
     }
 
@@ -297,9 +309,23 @@ final class Coordinator {
 
     // MARK: - Decision
 
+    /// CoreAudio state with the user's "Start on Playback / Microphone Use" switches applied — the
+    /// same masking `updateActivity` performs. The fire-time rechecks in both debounce timers must use
+    /// this rather than the raw snapshot: raw output reading true while `watchOutput` is off would
+    /// cancel a stop that nothing will ever reschedule (the masked reason has no edge left to fire),
+    /// leaving the visualiser stuck on the strip indefinitely.
+    private func maskedSnapshot() -> (output: Bool, input: Bool) {
+        let raw = audio.snapshot()
+        return (output: raw.output && settings.watchOutput,
+                input: raw.input && settings.watchInput)
+    }
+
     private func evaluate() {
         guard settings.enabled else {
-            if visualising { cancelTimers(); stopNow() }
+            // Unconditionally: a start timer armed just before the user switched SoundBar off would
+            // otherwise survive, fire, and present the visualiser while disabled.
+            cancelTimers()
+            if visualising { stopNow() }
             return
         }
 
@@ -315,7 +341,9 @@ final class Coordinator {
                 self.startTimer = nil
                 // Re-read CoreAudio rather than trusting the edge that scheduled this: the audio may
                 // have stopped again during the debounce, and property listeners are not ordered.
-                let now = self.audio.snapshot()
+                // `enabled` can also have flipped inside the window.
+                guard self.settings.enabled, !self.manualOverride else { return }
+                let now = self.maskedSnapshot()
                 guard self.hasDrawableSource(output: now.output, input: now.input) else {
                     Log.debug("coordinator", "start cancelled, nothing to draw at fire time")
                     return
@@ -335,7 +363,7 @@ final class Coordinator {
             stopTimer = schedule(after: delay) { [weak self] in
                 guard let self else { return }
                 self.stopTimer = nil
-                let now = self.audio.snapshot()
+                let now = self.maskedSnapshot()
                 guard !self.hasDrawableSource(output: now.output, input: now.input) else {
                     Log.debug("coordinator", "stop cancelled, audio active again at fire time")
                     return
@@ -350,6 +378,19 @@ final class Coordinator {
         Log.info("coordinator", "starting visualiser (\(reason), fullscreen=\(settings.fullscreen))")
 
         syncCaptureSources()
+
+        // If captures were wanted and none came up — the classic case being a missing Screen &
+        // System Audio Recording grant after a rebuild — presenting would seize the Touch Bar from
+        // BetterTouchTool to show a dead black strip, with only a verbose-level hint as to why.
+        // A *manual* start at idle wants no captures yet and is fine: the strip comes up dark and
+        // springs to life at the next activity edge, exactly as before.
+        let wanted = hasDrawableSource(output: reason.output, input: reason.input)
+        guard !wanted || tap.isRunning || microphone.isRunning else {
+            Log.warn("coordinator", "no capture source could start (permission missing?); "
+                                  + "not presenting — check Screen & System Audio Recording in "
+                                  + "System Settings > Privacy & Security")
+            return
+        }
 
         guard visualizer.present(fullscreen: settings.fullscreen) else {
             Log.error("coordinator", "could not present on the Touch Bar; standing down")

@@ -32,7 +32,10 @@ cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp "$PROJECT_DIR/Resources/MenuBarNote.svg" "$APP/Contents/Resources/MenuBarNote.svg"
 
 echo "==> Compiling"
-# shellcheck disable=SC2046
+# Collected into an array so the build survives a project path containing spaces — an unquoted
+# $(find ...) word-splits every filename.
+SOURCES=()
+while IFS= read -r file; do SOURCES+=("$file"); done < <(find "$PROJECT_DIR/Sources/SoundBar" -name '*.swift' | sort)
 swiftc \
   -sdk "$SDK" \
   -target "$TARGET" \
@@ -47,7 +50,7 @@ swiftc \
   -F /System/Library/PrivateFrameworks -framework DFRFoundation \
   -import-objc-header "$PROJECT_DIR/Sources/SoundBar/Private.h" \
   -o "$APP/Contents/MacOS/$APP_NAME" \
-  $(find "$PROJECT_DIR/Sources/SoundBar" -name '*.swift' | sort)
+  "${SOURCES[@]}"
 
 echo "==> Writing Info.plist"
 cat > "$APP/Contents/Info.plist" <<PLIST

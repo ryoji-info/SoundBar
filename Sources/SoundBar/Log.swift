@@ -7,12 +7,6 @@ import os
 enum Log {
     static let subsystem = "com.ryoji.SoundBar"
 
-    static let audio = Logger(subsystem: subsystem, category: "audio")
-    static let atb = Logger(subsystem: subsystem, category: "atb")
-    static let btt = Logger(subsystem: subsystem, category: "btt")
-    static let touch = Logger(subsystem: subsystem, category: "touch")
-    static let app = Logger(subsystem: subsystem, category: "app")
-
     static let fileURL: URL = {
         let dir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/SoundBar", isDirectory: true)

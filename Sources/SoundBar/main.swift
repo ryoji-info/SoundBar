@@ -73,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             // The coordinator owns the band count, because it depends on the current pattern.
             self.coordinator.settingsChanged()
+            self.gestures.refreshTunables()
             self.menuBar?.refreshIcon()
         }
 

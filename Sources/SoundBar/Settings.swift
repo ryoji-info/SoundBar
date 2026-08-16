@@ -48,7 +48,11 @@ enum InputMode: String, CaseIterable {
 ///     defaults write com.ryoji.SoundBar stopDelay -float 5
 ///     defaults write com.ryoji.SoundBar verboseLogging -bool YES
 ///
-/// SoundBar re-reads these whenever the defaults change, so most edits take effect immediately.
+/// Changes made from SoundBar's own menu take effect immediately. An external `defaults write`
+/// does NOT reach the running agent (measured: neither the change notification nor the value
+/// itself propagates into the process), so tuning from the terminal needs a restart:
+///
+///     launchctl kickstart -k "gui/$(id -u)/com.ryoji.SoundBar"
 final class Settings {
     static let shared = Settings()
 
@@ -131,7 +135,6 @@ final class Settings {
         static let frameRate = "frameRate"
         static let usableWidth = "usableWidth"
         static let showMenuBarItem = "showMenuBarItem"
-        static let visualiseMicrophone = "visualiseMicrophone"
         static let inputMode = "inputMode"
         static let inputGain = "inputGain"
     }
@@ -211,8 +214,8 @@ final class Settings {
 
     /// Spectral tilt in dB per octave, pivoting at 1 kHz, applied before a band becomes a bar height.
     ///
-    /// `0` (the default) shows the spectrum as measured, which leans left because music carries most
-    /// of its energy in the bass. `+6` is `level × frequency` — each doubling of frequency doubles the
+    /// `0` shows the spectrum as measured, which leans left because music carries most
+    /// of its energy in the bass; `+3` (the default) measures closest to even. `+6` is `level × frequency` — each doubling of frequency doubles the
     /// amplitude — and makes the treble end genuinely active. Clamped to ±12, beyond which the display
     /// is all floor or all ceiling.
     var frequencyTilt: Double { min(12, max(-12, defaults.double(forKey: Key.frequencyTilt))) }
@@ -281,21 +284,12 @@ final class Settings {
 
     /// How a live microphone is reflected on the strip.
     ///
-    /// Supersedes the old `visualiseMicrophone` boolean: if that was explicitly turned off before this
-    /// setting existed, it still wins and resolves to `.off`, so an existing preference is not
-    /// silently reversed by the upgrade.
     var inputMode: InputMode {
-        if defaults.object(forKey: Key.visualiseMicrophone) != nil,
-           !defaults.bool(forKey: Key.visualiseMicrophone) {
-            return .off
-        }
-        return InputMode(rawValue: defaults.string(forKey: Key.inputMode) ?? "") ?? .mix
+        InputMode(rawValue: defaults.string(forKey: Key.inputMode) ?? "") ?? .mix
     }
 
     func setInputMode(_ mode: InputMode) {
         defaults.set(mode.rawValue, forKey: Key.inputMode)
-        // Clear the superseded boolean so it cannot keep forcing `.off`.
-        defaults.removeObject(forKey: Key.visualiseMicrophone)
     }
 
     /// Multiplies the microphone's contribution before it is mixed or drawn.

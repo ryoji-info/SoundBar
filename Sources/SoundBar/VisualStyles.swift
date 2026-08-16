@@ -158,7 +158,7 @@ enum VisualRenderer {
 
         // One colour per segment row, not per bar: the same five colours serve every bar.
         let segmentColors = frame.palette.cgColors(count: segments)
-        let segmentDim = segmentColors.map { $0.copy(alpha: 0.055) ?? $0 }
+        let segmentDim = frame.palette.cgColors(count: segments, alpha: 0.055)
 
         for (index, level) in levels.enumerated() {
             let value = CGFloat(min(max(level, 0), 1))
@@ -192,6 +192,7 @@ enum VisualRenderer {
         let width = max(1, slot * CGFloat(Settings.shared.barWidthFraction))
         let inset = (slot - width) / 2
         let colors = frame.palette.cgColors(count: levels.count)
+        let dimmed = frame.palette.cgColors(count: levels.count, alpha: 0.45)
         let capHeight: CGFloat = 2
 
         for (index, level) in levels.enumerated() {
@@ -209,7 +210,7 @@ enum VisualRenderer {
             }
 
             // The bar itself, dimmed, so the cap is what the eye follows.
-            context.setFillColor(colors[index].copy(alpha: 0.45) ?? colors[index])
+            context.setFillColor(dimmed[index])
             context.fill(CGRect(x: x, y: 0, width: width, height: max(1, value * bounds.height)))
 
             let capY = min(bounds.height - capHeight, peakCaps[index] * bounds.height)
@@ -238,7 +239,7 @@ enum VisualRenderer {
         let radius = diameter / 2
 
         let rowColors = frame.palette.cgColors(count: rows)
-        let rowDim = rowColors.map { $0.copy(alpha: 0.10) ?? $0 }
+        let rowDim = frame.palette.cgColors(count: rows, alpha: 0.10)
 
         // How many dots are lit in each column.
         var litPerColumn = [Int](repeating: 0, count: columns)
@@ -303,14 +304,17 @@ enum VisualRenderer {
         context.setLineCap(.round)
 
         let step = bounds.width / CGFloat(samples.count - 1)
-        // Draw in a few coloured segments so the palette shows along the trace.
+        // Draw in a few coloured segments so the palette shows along the trace. The segment colours
+        // come from the cache: interpolating and bridging an NSColor per segment per frame (24 × 20/s)
+        // bypassed it for an answer that never changes within a palette.
         let segments = 24
+        let segmentColors = frame.palette.cgColors(count: segments)
         let perSegment = max(1, samples.count / segments)
         var index = 0
         while index < samples.count - 1 {
             let end = min(samples.count - 1, index + perSegment)
             let t = Double(index) / Double(max(1, samples.count - 1))
-            context.setStrokeColor(frame.palette.color(at: t).cgColor)
+            context.setStrokeColor(segmentColors[min(segments - 1, Int(t * Double(segments)))])
             context.beginPath()
             for i in index...end {
                 let y = midY + min(amplitude, max(-amplitude, CGFloat(samples[i]) * gain * amplitude))
@@ -428,10 +432,14 @@ enum VisualRenderer {
             context.restoreGState()
         }
 
-        // dB ticks at -30, -20, -12, -6, -3 within the meter's -42...-3 window.
+        // dB ticks within the meter's actual window, which is `vuFloor`…−3 and configurable — a
+        // hardcoded window here drifts off the real scale the moment that knob is touched, and the
+        // ticks become labels for levels they no longer mark.
+        let floor = Settings.shared.vuFloor
+        let ceiling = -3.0
         context.setFillColor(NSColor(white: 1, alpha: 0.22).cgColor)
-        for db in [-30.0, -20.0, -12.0, -6.0] {
-            let t = (db - (-42.0)) / ((-3.0) - (-42.0))
+        for db in [-30.0, -20.0, -12.0, -6.0] where db > floor {
+            let t = (db - floor) / (ceiling - floor)
             let x = rect.minX + CGFloat(t) * rect.width
             context.fill(CGRect(x: x, y: rect.minY, width: 1, height: rect.height))
         }

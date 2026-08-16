@@ -17,6 +17,19 @@ final class MicrophoneCapture {
     private(set) var isRunning = false
     private(set) var lastError: String?
 
+    /// Fired on the main queue after the captured device disappears (a USB or Bluetooth microphone
+    /// unplugged mid-call). The capture has already been torn down; the owner should re-sync so the
+    /// surviving microphone is picked up — without this the strip shows a frozen spectrum bound to a
+    /// device that no longer exists, for as long as the call lasts.
+    var onDeviceDied: (() -> Void)?
+
+    /// Retained so the listener can be removed symmetrically in `stop()`.
+    private var aliveListener: AudioObjectPropertyListenerBlock?
+    private static var aliveAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyDeviceIsAlive,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+
     init(analyzer: SpectrumAnalyzer) {
         self.analyzer = analyzer
     }
@@ -73,12 +86,37 @@ final class MicrophoneCapture {
         }
 
         isRunning = true
+        watchDeviceAliveness(of: device)
         Log.info("mic", "capturing \(VolumeController.name(of: device) ?? "microphone") "
                       + "at \(Int(format.mSampleRate)) Hz, \(channels) ch")
         return true
     }
 
+    /// Tears the capture down if the device vanishes, and tells the owner to re-sync.
+    ///
+    /// macOS moves the *call app* to the surviving microphone automatically when one is unplugged, so
+    /// input activity continues — but our IOProc stays bound to the dead device and simply never fires
+    /// again, freezing the display. `DeviceIsAlive` is the disconnect signal.
+    private func watchDeviceAliveness(of device: AudioObjectID) {
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self, self.isRunning, self.deviceID == device else { return }
+            var alive: UInt32 = 1
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            let status = AudioObjectGetPropertyData(device, &Self.aliveAddress, 0, nil, &size, &alive)
+            guard status != noErr || alive == 0 else { return }
+            Log.warn("mic", "captured microphone disappeared; stopping and re-syncing")
+            self.stop()
+            self.onDeviceDied?()
+        }
+        aliveListener = listener
+        AudioObjectAddPropertyListenerBlock(device, &Self.aliveAddress, .main, listener)
+    }
+
     func stop() {
+        if let aliveListener, deviceID != AudioObjectID(kAudioObjectUnknown) {
+            AudioObjectRemovePropertyListenerBlock(deviceID, &Self.aliveAddress, .main, aliveListener)
+        }
+        aliveListener = nil
         if let ioProcID, deviceID != AudioObjectID(kAudioObjectUnknown) {
             AudioDeviceStop(deviceID, ioProcID)
             AudioDeviceDestroyIOProcID(deviceID, ioProcID)

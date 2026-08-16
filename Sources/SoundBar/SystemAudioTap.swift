@@ -30,15 +30,6 @@ final class SystemAudioTap {
 
     private(set) var isRunning = false
 
-    /// Diagnostics for --tap-test: how often the IOProc fired and whether anything was non-zero.
-    private(set) var ioProcCalls = 0
-    private(set) var buffersSeen = 0
-    private(set) var nonZeroSamples = 0
-    private(set) var lastBufferBytes = 0
-    private(set) var lastBufferChannels = 0
-    private(set) var aggregateInputChannels = 0
-    private(set) var deviceReportsRunning = false
-
     /// Set when the last start failed because macOS refused the tap, which in practice means the
     /// user has not granted audio recording.
     private(set) var lastError: String?
@@ -119,12 +110,10 @@ final class SystemAudioTap {
         }
 
         isRunning = true
-        deviceReportsRunning = AudioActivityMonitor.flag(aggregateID, kAudioDevicePropertyDeviceIsRunning)
         let inCh = VolumeController.inputChannelCount(aggregateID)
         let outCh = VolumeController.outputChannelCount(aggregateID)
         Log.info("tap", "system audio tap running (private aggregate \(aggregateID), "
                       + "in=\(inCh)ch out=\(outCh)ch)")
-        aggregateInputChannels = inCh
         return true
     }
 
@@ -157,19 +146,14 @@ final class SystemAudioTap {
     // MARK: - Audio thread
 
     private func consume(_ bufferList: UnsafePointer<AudioBufferList>, channels: Int) {
-        ioProcCalls += 1
         let buffers = UnsafeMutableAudioBufferListPointer(
             UnsafeMutablePointer(mutating: bufferList))
         for buffer in buffers {
-            buffersSeen += 1
             guard let raw = buffer.mData, buffer.mDataByteSize > 0 else { continue }
             let count = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
             let channelsInBuffer = max(1, Int(buffer.mNumberChannels))
-            lastBufferBytes = Int(buffer.mDataByteSize)
-            lastBufferChannels = channelsInBuffer
-            let floats = raw.assumingMemoryBound(to: Float.self)
-            for i in 0..<min(count, 512) where floats[i] != 0 { nonZeroSamples += 1 }
-            analyzer.append(samples: floats, count: count, channels: channelsInBuffer)
+            analyzer.append(samples: raw.assumingMemoryBound(to: Float.self),
+                            count: count, channels: channelsInBuffer)
         }
     }
 

@@ -22,9 +22,6 @@ final class TouchBarVisualizer: NSObject, NSTouchBarDelegate {
         didSet { view?.style = style }
     }
 
-    /// Called when the strip is given up, so the coordinator can check on BetterTouchTool.
-    var onDismissed: (() -> Void)?
-
     private let settings = Settings.shared
     private var touchBar: NSTouchBar?
     private var view: VisualizerView?
@@ -121,7 +118,6 @@ final class TouchBarVisualizer: NSObject, NSTouchBarDelegate {
         touchBar = nil
         view = nil
         Log.info("visualizer", "dismissed; Touch Bar released")
-        onDismissed?()
     }
 
     // MARK: - NSTouchBarDelegate
@@ -145,14 +141,32 @@ final class TouchBarVisualizer: NSObject, NSTouchBarDelegate {
 
     // MARK: - Render loop
 
+    /// The rate the running render timer was built with, so a live `frameRate` change is detectable.
+    private var renderingAtRate: Double = 0
+
+    /// Applies a changed `frameRate` to a live render loop — part of the "re-read live" contract;
+    /// without this the new rate only took effect at the next present.
+    func refreshRenderRate() {
+        guard isPresenting, renderTimer != nil, settings.frameRate != renderingAtRate else { return }
+        startRendering()
+    }
+
     /// Runs only while the visualiser is on screen, so SoundBar costs nothing when idle.
     private func startRendering() {
         stopRendering()
+        renderingAtRate = settings.frameRate
         let interval = 1.0 / settings.frameRate
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(4))
         timer.setEventHandler { [weak self] in
             guard let self, let view = self.view else { return }
+            // Live frameRate: an external `defaults write` updates the value but fires no
+            // notification, so the loop checks its own rate each tick (a cached-dictionary read)
+            // and rebuilds itself when the setting moves.
+            if self.settings.frameRate != self.renderingAtRate {
+                self.startRendering()
+                return
+            }
             view.refresh()
             self.logLevelsOccasionally()
         }

@@ -38,6 +38,14 @@ final class VisualizerView: NSView {
     /// True while the last frame drawn was completely flat, so a second flat frame can be skipped.
     private var lastFrameWasSilent = false
 
+    /// The frame fetched by `refresh()`, consumed by the `draw(_:)` it triggers.
+    ///
+    /// Both run on the main thread and the display pass follows the `needsDisplay` it sets, so
+    /// handing the data across in an ivar halves the per-frame work: previously `draw` called the
+    /// provider again, paying the whole assembly pipeline — analyser locks, level/waveform copies,
+    /// and in mixed mode the blend — twice for every frame shown.
+    private var pendingFrame: VisualFrameData?
+
     /// Called by the render loop; redraws only when there is something new to show.
     ///
     /// Redisplay is the expensive part (measured per-frame, not per-pixel), so a frame that would look
@@ -54,11 +62,16 @@ final class VisualizerView: NSView {
         }
 
         let data = frameProvider?() ?? emptyVisualFrameData
-        let silent = (data.levels.max() ?? 0) < 0.004
+        var silent = (data.levels.max() ?? 0) < 0.004
             && max(data.vu.left, data.vu.right) < 0.004
-            && (data.waveform.map { abs($0) }.max() ?? 0) < 0.002
+        if silent {
+            // Only consulted when everything else is already flat, so the map allocation is confined
+            // to the silence boundary rather than paid on every tick.
+            silent = (data.waveform.map { abs($0) }.max() ?? 0) < 0.002
+        }
         if silent && lastFrameWasSilent { return }
         lastFrameWasSilent = silent
+        pendingFrame = data
         needsDisplay = true
     }
 
@@ -73,7 +86,10 @@ final class VisualizerView: NSView {
             Log.info("visualizer", "view bounds \(Int(bounds.width)) x \(Int(bounds.height)) pt "
                                  + "(asked for \(Int(frame.width)) x \(Int(frame.height)))")
         }
-        let data = frameProvider?() ?? emptyVisualFrameData
+        // Consume the frame `refresh()` fetched; fall back to a fresh one only for AppKit-initiated
+        // redraws (first presentation, palette/style changes) that no refresh preceded.
+        let data = pendingFrame ?? frameProvider?() ?? emptyVisualFrameData
+        pendingFrame = nil
 
         // Draw into the part of the strip that is actually visible. The view is 1085 pt wide, but the
         // Touch Bar clips the right-hand end; drawing to the full width silently loses the top

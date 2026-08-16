@@ -76,7 +76,11 @@ final class TouchBarGestureRecognizer {
 
     /// Idle seconds past which the strip is assumed dark, so the next touch only wakes it. `0` keeps
     /// every touch a gesture. macOS dims at roughly 75 s — measured wakes landed at 77.5 s idle.
-    var wakeTouchIdleThreshold: Double = 70
+    ///
+    /// Read from Settings on use rather than copied at start: external `defaults write` updates the
+    /// value cfprefsd serves but never fires the in-process change notification, so a copy taken at
+    /// start() is the one thing that can never see it. Reading fresh is what "re-read live" costs.
+    var wakeTouchIdleThreshold: Double { settings.wakeTouchIdleSeconds }
 
     private var contacts: [Int32: Contact] = [:]
     private var session: Session?
@@ -94,8 +98,9 @@ final class TouchBarGestureRecognizer {
     ///
     /// 16 matches the granularity of the volume keys; the default of 32 is deliberately finer, because
     /// the strip is long enough to resolve it (7.3 mm of travel per step at 232 mm) and the keys are
-    /// already there for coarse changes.
-    var volumeSteps = 32
+    /// already there for coarse changes. Read from Settings on use, for the same live-tuning reason
+    /// as `wakeTouchIdleThreshold`.
+    var volumeSteps: Int { settings.volumeSteps }
 
     /// Millimetres of travel per volume step, derived so that one sweep of the strip is exactly the
     /// full range whatever `volumeSteps` is. Deriving it from the measured surface width rather than
@@ -321,7 +326,10 @@ final class TouchBarGestureReader {
 
     func start() {
         let settings = Settings.shared
-        guard settings.longPressStopsATB || settings.slideVolume || settings.tapCyclesStyle else { return }
+        // Every gesture switch belongs in this gate: omitting one means that gesture silently dies
+        // whenever it is the only one enabled (double-tap mute was missing and did exactly that).
+        guard settings.longPressStopsATB || settings.slideVolume
+                || settings.tapCyclesStyle || settings.doubleTapMutes else { return }
         if !Self.hasInputMonitoringPermission() {
             Log.debug("touch", "Input Monitoring is not granted; MultitouchSupport does not need it")
         }
@@ -334,10 +342,10 @@ final class TouchBarGestureReader {
             if let width = source.surfaceWidthMM {
                 recognizer.surfaceWidthMM = width
             }
-            recognizer.volumeSteps = settings.volumeSteps
-            recognizer.wakeTouchIdleThreshold = settings.wakeTouchIdleSeconds
             recognizer.systemIdleBeforeTouch = { [weak self] in self?.consumeRecentIdle() }
-            if recognizer.wakeTouchIdleThreshold > 0 { startIdleSampling() }
+            // Always sampled while the reader runs (one read per 2 s — negligible): whether a touch
+            // is a wake is decided against the live threshold, which can change at any time.
+            startIdleSampling()
             Log.info("touch", "Touch Bar gesture reader started (surface \(recognizer.surfaceWidthMM) mm wide, "
                             + "\(recognizer.volumeSteps) volume steps per sweep, wake-touch guard "
                             + (recognizer.wakeTouchIdleThreshold > 0
@@ -353,6 +361,15 @@ final class TouchBarGestureReader {
         idleSampler?.cancel()
         idleSampler = nil
         recognizer.reset()
+    }
+
+    /// Starts the reader late if every gesture was off at launch (so `start()` bailed) and one has
+    /// just been enabled from the menu. The tunables themselves need no refreshing: the recogniser
+    /// reads them from Settings on use, which is what makes external `defaults write` work too.
+    func refreshTunables() {
+        if backend == nil {
+            start()     // no-ops again if every gesture is still off
+        }
     }
 
     // MARK: - System idle sampling
@@ -379,6 +396,14 @@ final class TouchBarGestureReader {
             guard let self else { return }
             guard let idle = Self.systemIdleSeconds() else { return }
             let now = Date()
+            // A sampled reset means keyboard or trackpad input woke the strip, not a Touch Bar touch
+            // (a strip touch consumes-and-clears the history within ~67 ms, far inside one sampling
+            // interval). Drop the pre-wake history: the strip is lit again, and a stale dark-strip
+            // reading lingering in the window would swallow the next deliberate gesture for up to
+            // `idleWindow` seconds after a keyboard wake.
+            if let last = self.idleSamples.last, idle < last.idle {
+                self.idleSamples.removeAll()
+            }
             self.idleSamples.append((at: now, idle: idle))
             self.idleSamples.removeAll { now.timeIntervalSince($0.at) > self.idleWindow }
         }

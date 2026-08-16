@@ -3,8 +3,8 @@ import Foundation
 
 /// Turns raw audio into the per-bar levels the Touch Bar draws.
 ///
-/// Sized for the job rather than for accuracy: a 1024-point FFT at 48 kHz gives ~47 Hz bins, which is
-/// plenty of resolution for 44 log-spaced bars on a 30 pt tall strip, and costs microseconds. The
+/// Sized for the job: a 4096-point FFT at 48 kHz gives ~11.7 Hz bins, which is what lets the band
+/// range genuinely start at 20 Hz (1024 points would have no data below ~47 Hz at all). The
 /// analysis runs on the audio thread; `levels()` is read from the render loop, so the handoff is a
 /// small lock.
 final class SpectrumAnalyzer {
@@ -104,9 +104,10 @@ final class SpectrumAnalyzer {
 
     private var _levelBoostDB: Float = 0
 
-    /// A flat dB lift applied to every band *and* to the VU before the display window is applied —
-    /// i.e. it slides the whole `floorDB…ceilingDB` window down over the signal, so quiet material
-    /// fills more of the strip.
+    /// A flat dB lift applied to every band before the display window is applied — i.e. it slides
+    /// the whole `floorDB…ceilingDB` window down over the signal, so quiet material fills more of
+    /// the strip. Deliberately NOT applied to the VU, whose narrower window saturates; `vuFloorDB`
+    /// is the VU's sensitivity control.
     ///
     /// Purely cosmetic: it changes how loud the audio *looks*, never what is captured or played. The
     /// window spans 54 dB for the bars, so +6 is worth about 11 % of the strip's height.
@@ -149,23 +150,33 @@ final class SpectrumAnalyzer {
         lock.unlock()
     }
 
+    /// Mono mixdown scratch, reused across callbacks. Only the audio thread touches it (the same
+    /// single-writer discipline as `pending`/`pendingStart`), and it grows monotonically to the
+    /// largest callback seen — so after the first few callbacks `append` allocates nothing. A fresh
+    /// array per callback was ~94 malloc/free pairs a second on the realtime thread, and malloc takes
+    /// a process-wide lock: exactly the priority-inversion hazard the rest of this class avoids.
+    private var monoScratch: [Float] = []
+
     /// Feed interleaved or mono float samples. Called from the audio thread.
     func append(samples: UnsafePointer<Float>, count: Int, channels: Int) {
         guard count > 0, channels > 0 else { return }
-        // Mix to mono. Averaging is fine here; we only need an envelope, not a faithful downmix.
-        var mono = [Float](repeating: 0, count: count / channels)
-        if channels == 1 {
-            let frames = mono.count
-            mono.withUnsafeMutableBufferPointer { dst in
+        // Mix to mono into the reusable scratch. Averaging is fine here; we only need an envelope,
+        // not a faithful downmix.
+        let frames = count / channels
+        if monoScratch.count < frames {
+            monoScratch = [Float](repeating: 0, count: frames)
+        }
+        monoScratch.withUnsafeMutableBufferPointer { dst in
+            if channels == 1 {
                 dst.baseAddress!.update(from: samples, count: frames)
-            }
-        } else {
-            for frame in 0..<mono.count {
-                var sum: Float = 0
-                for channel in 0..<channels {
-                    sum += samples[frame * channels + channel]
+            } else {
+                for frame in 0..<frames {
+                    var sum: Float = 0
+                    for channel in 0..<channels {
+                        sum += samples[frame * channels + channel]
+                    }
+                    dst[frame] = sum / Float(channels)
                 }
-                mono[frame] = sum / Float(channels)
             }
         }
 
@@ -175,13 +186,13 @@ final class SpectrumAnalyzer {
 
         // Keep a ring of recent samples for the oscilloscope.
         lock.lock()
-        for value in mono {
-            waveRing[waveWrite] = value
+        for index in 0..<frames {
+            waveRing[waveWrite] = monoScratch[index]
             waveWrite = (waveWrite + 1) % waveRing.count
         }
         lock.unlock()
 
-        pending.append(contentsOf: mono)
+        pending.append(contentsOf: monoScratch[0..<frames])
 
         // A half-window hop gives a new spectrum every ~43 ms, which is ahead of the 20 fps render at
         // 50 ms, so nothing is lost by not going finer.
@@ -222,17 +233,6 @@ final class SpectrumAnalyzer {
         lock.unlock()
         pending.removeAll(keepingCapacity: true)
         pendingStart = 0
-    }
-
-    /// Feed a silence frame, so the bars decay when a stream stops rather than freezing.
-    func appendSilence() {
-        lock.lock()
-        for index in smoothed.indices {
-            smoothed[index] *= (1 - decay)
-        }
-        vuLeft *= 0.85
-        vuRight *= 0.85
-        lock.unlock()
     }
 
     private func updateVU(samples: UnsafePointer<Float>, count: Int, channels: Int) {
@@ -299,10 +299,14 @@ final class SpectrumAnalyzer {
     /// The most recent `count` samples, oldest first, for the oscilloscope.
     func waveform(count: Int) -> [Float] {
         guard count > 0 else { return [] }
-        lock.lock()
-        defer { lock.unlock() }
+        // Allocate before taking the lock: the audio thread blocks on this same lock in `append`,
+        // and a malloc stall inside the critical section would extend that wait unboundedly. The
+        // ring's size is fixed at init (reset() replaces it like-for-like), so reading it unlocked
+        // for sizing is safe.
         let span = min(count, waveRing.count)
         var out = [Float](repeating: 0, count: span)
+        lock.lock()
+        defer { lock.unlock() }
         // Decimate across a window several times longer than the output, so the trace shows a
         // recognisable wave rather than a few hundred microseconds of it.
         let window = min(waveRing.count, span * 8)
@@ -346,7 +350,12 @@ final class SpectrumAnalyzer {
         let tilt = tiltDBPerOctave                       // read once; locked accessors
         let boost = levelBoostDB
         let binWidth = Float(sampleRate) / Float(fftSize)
-        var frameLevels = [Float](repeating: 0, count: ranges.count)
+        // Reused across hops (audio-thread-only, like monoScratch); resized only when the band count
+        // changes, so the steady state allocates nothing. Written in place — copying it into a local
+        // `var` would just trade the malloc for a copy-on-write of the same size.
+        if frameLevelsScratch.count != ranges.count {
+            frameLevelsScratch = [Float](repeating: 0, count: ranges.count)
+        }
         for (index, range) in ranges.enumerated() {
             var peak: Float = 0
             for bin in range where bin < halfSize {
@@ -364,15 +373,17 @@ final class SpectrumAnalyzer {
                 let centre = (Float(range.lowerBound) + Float(range.upperBound)) * 0.5 * binWidth
                 db += tilt * log2(max(centre, 1) / Float(tiltPivotHz))
             }
-            frameLevels[index] = min(1, max(0, (db - floorDB) / (ceilingDB - floorDB)))
+            frameLevelsScratch[index] = min(1, max(0, (db - floorDB) / (ceilingDB - floorDB)))
         }
 
         lock.lock()
-        if smoothed.count != frameLevels.count {
-            smoothed = frameLevels
+        if smoothed.count != frameLevelsScratch.count {
+            // Rare (first hop after a band-count change): sharing the scratch's storage here costs
+            // one copy-on-write on the next hop, then the buffers are disjoint again.
+            smoothed = frameLevelsScratch
         } else {
             for index in smoothed.indices {
-                let target = frameLevels[index]
+                let target = frameLevelsScratch[index]
                 // Rise quickly, fall slowly.
                 let coefficient = target > smoothed[index] ? attack : decay
                 smoothed[index] += (target - smoothed[index]) * coefficient
@@ -380,6 +391,9 @@ final class SpectrumAnalyzer {
         }
         lock.unlock()
     }
+
+    /// See the comment at its use in `analyse`. Audio-thread-only.
+    private var frameLevelsScratch: [Float] = []
 
     private var bandRangesCache: [Range<Int>]?
 

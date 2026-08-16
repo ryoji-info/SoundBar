@@ -182,7 +182,7 @@ against the next.
 
 The VU meter is a real averaging meter, not a peak meter: the level integrates with a ~130 ms time
 constant so it swings like a needle rather than flickering, and the white peak marker holds for 1.1 s
-before sliding back. Its window is −42…−3 dBFS.
+before sliding back. Its window is `vuFloor`…−3 dBFS (default −40…−3), and the dB ticks follow it.
 
 The choice persists, so the pattern you leave it on is the one you get next time.
 
@@ -365,7 +365,15 @@ while audio plays, that is the grant to check.
 
 ## Settings
 
-Every tunable is a `defaults` key in `com.ryoji.SoundBar`, re-read live:
+Every tunable is a `defaults` key in `com.ryoji.SoundBar`. Changes made from SoundBar's own menu
+apply immediately; an external `defaults write` does **not** reach the running agent (measured:
+neither the change notification nor the new value propagates into the process), so terminal tuning
+is always followed by a restart:
+
+```bash
+defaults write com.ryoji.SoundBar <key> <value>
+launchctl kickstart -k "gui/$(id -u)/com.ryoji.SoundBar"
+```
 
 ```bash
 defaults write com.ryoji.SoundBar paletteName -string rainbow
@@ -409,7 +417,7 @@ defaults write com.ryoji.SoundBar paletteName -string rainbow
 
 ## The menu bar item
 
-The icon shows state at a glance: solid while visualising, dim when idle, `waveform.slash` when
+The icon shows state at a glance: solid while visualising, dim when idle, `music.note.slash` when
 SoundBar is switched off, and a crossed-out speaker when the output is muted. Its tooltip names the
 current pattern and colour.
 

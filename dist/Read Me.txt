@@ -122,7 +122,9 @@ rather less than that is on screen). Set them with:
 
     defaults write com.ryoji.SoundBar <key> <value>
 
-They are re-read live.
+Then restart the agent so it picks them up:
+
+    launchctl kickstart -k "gui/$(id -u)/com.ryoji.SoundBar"
 
 
 UPDATING
